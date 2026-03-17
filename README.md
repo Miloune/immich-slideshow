@@ -1,4 +1,4 @@
-# immich-slideshow
+# <img src="https://github.com/Miloune/immich-slideshow/raw/master/brand/logo.png" width="40" height="40" align="center"> immich-slideshow
 Custom card for Home Assistant's UI Lovelace which displays an image slideshow from an Immich server. The integration runs its API calls through the **Home Assistant backend**, completely avoiding any browser CORS issues.
 
 ![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/preview.gif)

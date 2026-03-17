@@ -1,4 +1,5 @@
 {
   "name": "Immich Slideshow",
-  "render_readme": true
+  "render_readme": true,
+  "domains": ["immich_slideshow"]
 }
