@@ -19,6 +19,20 @@ class ImmichSlideshow extends LitElement {
     };
   }
 
+  static getConfigElement() {
+    return document.createElement("immich-slideshow-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      host: "http://your-immich-server-ip:2283",
+      apikey: "",
+      slideshow_interval: 6,
+      height: "100%",
+      albums: []
+    };
+  }
+
   render() {
     return html`
      <ha-card style="overflow:hidden;">
@@ -212,6 +226,126 @@ class ImmichSlideshow extends LitElement {
 }//End of ImmichSlideshow class
 
 customElements.define("immich-slideshow", ImmichSlideshow);
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "immich-slideshow",
+  name: "Immich Slideshow",
+  description: "A custom card that displays a slideshow of images from an Immich server."
+});
+
+class ImmichSlideshowEditor extends LitElement {
+  setConfig(config) {
+    this._config = { ...config };
+  }
+
+  static get properties() {
+    return { hass: {}, _config: {} };
+  }
+
+  get _host() { return this._config.host || ""; }
+  get _apikey() { return this._config.apikey || ""; }
+  get _slideshow_interval() { return this._config.slideshow_interval || 6; }
+  get _height() { return this._config.height || "100%"; }
+  get _albums() { return this._config.albums || []; }
+
+  render() {
+    if (!this.hass) {
+      return html``;
+    }
+
+    const schema = [
+      {
+        name: "host",
+        required: true,
+        selector: { text: {} },
+        default: "http://your-immich-server-ip:2283"
+      },
+      {
+        name: "apikey",
+        required: true,
+        selector: { text: { type: "password" } },
+        default: ""
+      },
+      {
+        name: "slideshow_interval",
+        required: false,
+        selector: { number: { min: 6, mode: "box" } },
+        default: 6
+      },
+      {
+        name: "height",
+        required: false,
+        selector: { text: {} },
+        default: "100%"
+      },
+      {
+        name: "albums",
+        required: false,
+        selector: { object: {} }
+      }
+    ];
+
+    const data = {
+      host: this._host,
+      apikey: this._apikey,
+      slideshow_interval: this._slideshow_interval,
+      height: this._height,
+      albums: this._albums
+    };
+
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${data}
+        .schema=${schema}
+        .computeLabel=${this._computeLabel}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+      <p style="margin-top: 8px;">Note: Currently, 'albums' expects a list of album IDs. In the visual editor, you might need to input them as a YAML list or JSON array for object selectors, or carefully edit in YAML mode.</p>
+    `;
+  }
+
+  _computeLabel(schema) {
+    const labels = {
+      host: "Immich Server URL",
+      apikey: "Immich API Key",
+      slideshow_interval: "Slideshow Interval (seconds, min 6)",
+      height: "Card Height (e.g. 500px, 100vh)",
+      albums: "Album IDs (Optional List)"
+    };
+    return labels[schema.name] || schema.name;
+  }
+
+  _valueChanged(ev) {
+    if (!this._config || !this.hass) {
+      return;
+    }
+    const target = ev.target;
+    if (this[`_${target.configValue}`] === target.value) {
+      return;
+    }
+    if (target.configValue) {
+      if (target.value === "") {
+        delete this._config[target.configValue];
+      } else {
+        this._config = {
+          ...this._config,
+          [target.configValue]: target.value
+        };
+      }
+    } else if (ev.detail.value) {
+        this._config = { ...ev.detail.value };
+    }
+    const event = new CustomEvent("config-changed", {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true
+    });
+    this.dispatchEvent(event);
+  }
+}
+
+customElements.define("immich-slideshow-editor", ImmichSlideshowEditor);
 
 //--------------------------------------------------------------------------------------------------
 //INFO

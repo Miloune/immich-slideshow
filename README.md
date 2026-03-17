@@ -38,6 +38,19 @@ slideshow_interval | NO | 6 | Time (in seconds) after new image is loaded (minim
 height| NO | auto | Card height (eg. 500px)
 albums | NO | - | Single album ID or list of album IDs to restrict the slideshow to
 
+### YAML Configuration Example
+
+```yaml
+type: custom:immich-slideshow
+host: 'http://192.168.1.100:2283'
+apikey: 'your_immich_api_key_here'
+slideshow_interval: 10
+height: 500px
+albums:
+  - 'first_album_id_here'
+  - 'second_album_id_here'
+```
+
 # Preview in chromium browser
 Run chromium using fallowing commands:
 
