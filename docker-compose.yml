@@ -1,0 +1,13 @@
+# docker-compose.yml
+services:
+  homeassistant:
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    container_name: ha-dev
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Paris
+    volumes:
+      - ./config:/config
+      - ./custom_components:/config/custom_components
+    ports:
+      - "8123:8123"
