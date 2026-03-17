@@ -47,28 +47,21 @@ class ImmichSlideshow extends LitElement {
     return this.renderRoot.querySelector(".wrapper img." + className);
   }
 
+  _currentBlobUrl = null;
+
   _onBottomLoad(e) {
-    var bottom = this._getImg("bottom");
-    if (bottom.src.startsWith("blob:")) {
-      URL.revokeObjectURL(bottom.src);
-    }
+    // No-op, we manage blobs in _nextImage
   }
 
   _imgErrorCount = 0;
   _maxImgErrorCount = 10;
 
   _onTopError(e) {
+    this._log("Image load error on top element.");
     this._imgErrorCount++;
-    if (this._imgErrorCount <= this._maxImgErrorCount) {
-      this._log(`Emergency image reloading, attempt ${this._imgErrorCount} of ${this._maxImgErrorCount}.`);
-      var top = this._getImg("top");
-      URL.revokeObjectURL(top.src);
-      top.classList.replace("visible", "hidden");
-      setTimeout(()=>{this._nextImage()},500);
-    }
-    else {
-      this._log(`Emergency, reloading image, maximum number of attempts reached (${this._maxImgErrorCount}).`);
-    }
+    // We just hide it and let the next scheduled slideshow attempt handle it
+    var top = this._getImg("top");
+    top.classList.replace("visible", "hidden");
   }
 
   _onTopLoad(e) {
@@ -97,10 +90,28 @@ class ImmichSlideshow extends LitElement {
     }, this.config.slideshow_interval * 1000);
   }
 
+  _isFetching = false;
   async _nextImage() {
-    var top = this._getImg("top");
-    top.src = await this._getNextImageURL();
-    top.classList.replace("hidden", "visible");
+    if (this._isFetching) return;
+    this._isFetching = true;
+
+    try {
+      const nextUrl = await this._getNextImageURL();
+      
+      // Revoke the OLD blob if it exists, NOW that we have a new one ready
+      if (this._currentBlobUrl) {
+        URL.revokeObjectURL(this._currentBlobUrl);
+      }
+      this._currentBlobUrl = nextUrl;
+
+      var top = this._getImg("top");
+      top.src = nextUrl;
+      top.classList.replace("hidden", "visible");
+    } catch (e) {
+      this._log("Error fetching image: " + e.message);
+    } finally {
+      this._isFetching = false;
+    }
   }
 
   setConfig(config) {
