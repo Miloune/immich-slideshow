@@ -19,6 +19,7 @@ class ImmichSlideshow extends LitElement {
       // This survives the frequent hass updates without wiping img.src or classes.
       _slotA: { state: true },
       _slotB: { state: true },
+      _assetDate: { state: true },
     };
   }
 
@@ -26,6 +27,7 @@ class ImmichSlideshow extends LitElement {
     super();
     this._slotA = { src: PlaceholderSrc, active: false };
     this._slotB = { src: PlaceholderSrc, active: false };
+    this._assetDate = null;
   }
 
   static getConfigElement() {
@@ -36,6 +38,7 @@ class ImmichSlideshow extends LitElement {
     return {
       slideshow_interval: 10,
       height: 400,
+      show_date: true,
       albums: []
     };
   }
@@ -54,6 +57,9 @@ class ImmichSlideshow extends LitElement {
             class="${this._slotB.active ? 'active' : ''}"
             alt="immich-slideshow"
           >
+          ${this.config.show_date && this._assetDate ? html`
+            <div class="date-overlay">${this._formatDate(this._assetDate)}</div>
+          ` : ''}
         </div>
       </ha-card>
     `;
@@ -124,7 +130,7 @@ class ImmichSlideshow extends LitElement {
       const currentSlot = this._currentSlot;
 
       // Use pre-fetched URL if available, otherwise fetch now.
-      const url = this._prefetchedUrl ?? await this._fetchImageUrl();
+      const { blobUrl: url, date } = this._prefetchedUrl ?? await this._fetchImageUrl();
       this._prefetchedUrl = null;
 
       if (!url) return;
@@ -144,6 +150,7 @@ class ImmichSlideshow extends LitElement {
       }
       this._slotBlobs[nextSlot] = url;
       this._currentSlot = nextSlot;
+      this._assetDate = date;
 
       // Update reactive state → LitElement re-renders safely.
       if (nextSlot === 'a') {
@@ -179,11 +186,21 @@ class ImmichSlideshow extends LitElement {
     }
     const response = await this.hass.fetchWithAuth(url);
     if (!response.ok) throw new Error(`Immich proxy error: ${response.status}`);
+    const date = response.headers.get("X-Immich-Date") ?? null;
     const blob = await response.blob();
-    return URL.createObjectURL(blob);
+    return { blobUrl: URL.createObjectURL(blob), date };
   }
 
   // ── Config ─────────────────────────────────────────────────────────────────
+
+  _formatDate(isoString) {
+    if (!isoString) return "";
+    return new Date(isoString).toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
 
   setConfig(config) {
     const isconfig = { ...config };
@@ -194,6 +211,8 @@ class ImmichSlideshow extends LitElement {
 
     if (!isconfig.slideshow_interval || isconfig.slideshow_interval < 6)
       isconfig.slideshow_interval = 6;
+
+    if (isconfig.show_date === undefined) isconfig.show_date = true;
 
     const albums = isconfig.albums;
     if (albums) {
@@ -235,6 +254,23 @@ class ImmichSlideshow extends LitElement {
         opacity: 1;
         z-index: 1;
       }
+
+      .date-overlay {
+        position: absolute;
+        bottom: 4px;
+        right: 4px;
+        z-index: 2;
+        color: #fff;
+        font-size: 0.78rem;
+        font-family: sans-serif;
+        letter-spacing: 0.03em;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(4px);
+        padding: 3px 8px;
+        border-radius: 4px;
+        pointer-events: none;
+        user-select: none;
+      }
     `;
   }
 }
@@ -260,6 +296,7 @@ class ImmichSlideshowEditor extends LitElement {
 
   get _slideshow_interval() { return this._config?.slideshow_interval ?? 10; }
   get _height() { return this._config?.height ?? "100%"; }
+  get _show_date() { return this._config?.show_date ?? true; }
   get _albums() { return this._config?.albums ?? []; }
 
   render() {
@@ -279,6 +316,12 @@ class ImmichSlideshowEditor extends LitElement {
         default: 400
       },
       {
+        name: "show_date",
+        required: false,
+        selector: { boolean: {} },
+        default: true
+      },
+      {
         name: "albums",
         required: false,
         selector: { object: {} }
@@ -288,6 +331,7 @@ class ImmichSlideshowEditor extends LitElement {
     const data = {
       slideshow_interval: this._slideshow_interval,
       height: this._height,
+      show_date: this._show_date,
       albums: this._albums,
     };
 
@@ -306,6 +350,7 @@ class ImmichSlideshowEditor extends LitElement {
     const labels = {
       slideshow_interval: "Slideshow Interval (seconds, min 6)",
       height: "Card Height (px, e.g. 500)",
+      show_date: "Show Date",
       albums: "Album IDs (Optional List)"
     };
     return labels[schema.name] ?? schema.name;

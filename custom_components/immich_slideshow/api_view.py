@@ -88,7 +88,8 @@ async def _refill_cache(
             results = await resp.json()
             if results:
                 hass_data.setdefault(cache_key, []).extend(
-                    item["id"] for item in results
+                    {"id": item["id"], "date": item.get("fileCreatedAt", "")}
+                    for item in results
                 )
                 _LOGGER.debug(
                     "Background refill done: +%d IDs for %s (total: %d)",
@@ -165,7 +166,9 @@ class ImmichRandomImageView(HomeAssistantView):
                 if not hass_data[cache_key]:
                     break
 
-                asset_id = hass_data[cache_key].pop(0)
+                asset = hass_data[cache_key].pop(0)
+                asset_id   = asset["id"]
+                asset_date = asset["date"]
 
                 async with session.get(
                     f"{host}/api/assets/{asset_id}/thumbnail",
@@ -189,7 +192,10 @@ class ImmichRandomImageView(HomeAssistantView):
         return web.Response(
             body=image_data,
             content_type=content_type,
-            headers={"Cache-Control": "no-store"},
+            headers={
+                "Cache-Control": "no-store",
+                "X-Immich-Date": asset_date,
+            },
         )
 
 
