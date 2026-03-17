@@ -1,98 +1,111 @@
-# <img src="https://github.com/Miloune/immich-slideshow/raw/master/brand/logo.png" width="40" height="40" align="center"> immich-slideshow
-Custom card for Home Assistant's UI Lovelace which displays an image slideshow from an Immich server. The integration runs its API calls through the **Home Assistant backend**, completely avoiding any browser CORS issues.
+# <img src="https://github.com/Miloune/immich-slideshow/raw/master/brand/logo.png" width="32" height="32" align="center"> Immich Slideshow
 
-![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/preview.gif)
+A Home Assistant custom integration that displays a photo slideshow from your [Immich](https://immich.app) server directly in your Lovelace dashboard.
 
-![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/preview2.gif)
+All API calls are proxied through the **Home Assistant backend** — no CORS issues, no credentials exposed to the browser.
 
-# Plugin installation
+![Preview](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/preview.gif)
+![Preview](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/settings.png)
+
+---
+
+## Requirements
+
+- A running [Immich](https://immich.app) instance
+- Home Assistant with HACS (recommended) or manual installation
 
 > [!IMPORTANT]
-> This is a **full Custom Integration** (not just a Lovelace plugin). It must be installed into `custom_components/`, not `www/`.
+> This is a **full Custom Integration**, not just a Lovelace card. It must be installed into `custom_components/`, not `www/`.
 
-## Method 1: HACS (Recommended)
+---
 
-1. Open **HACS** in Home Assistant.
-2. Go to **Integrations**, click the three dots in the top right corner, and select **Custom repositories**.
-3. Add the URL of this repository (`https://github.com/Miloune/immich-slideshow`) and select **Integration** as the category.
-4. Click **Add**, find **Immich Slideshow** in the list, and download it.
-5. **Restart Home Assistant**.
+## Installation
 
-## Method 2: Manual Installation
+### Method 1 — HACS (Recommended)
 
-1. Download or clone this repository.
-2. Copy the `custom_components/immich_slideshow/` folder into your Home Assistant `config/custom_components/` directory.
-3. **Restart Home Assistant**.
+1. Open **HACS** → **Integrations**
+2. Click the three-dot menu → **Custom repositories**
+3. Add `https://github.com/Miloune/immich-slideshow` with category **Integration**
+4. Find **Immich Slideshow** and click **Download**
+5. **Restart Home Assistant**
 
-# Immich server configuration
-1. Log in to your Immich server and create a new API Key:
+### Method 2 — Manual
 
-![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/apikey.jpg)
+1. Download or clone this repository
+2. Copy `custom_components/immich_slideshow/` into your HA `config/custom_components/` directory
+3. **Restart Home Assistant**
 
-# HomeAssistant configuration
+---
 
-## Step 1: Set up the integration
+## Setup
 
-1. Go to **Settings → Devices & Services → Add Integration**.
-2. Search for **Immich Slideshow**.
-3. Enter your Immich server URL and API Key in the form and click **Submit**.
+### 1. Create an Immich API Key
 
-The integration will validate the connection and register itself automatically.
+In your Immich web interface, go to **Account Settings → API Keys** and create a new key.
 
-## Step 2: Add the Lovelace card
+![API Key](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/apikey.jpg)
 
-The Lovelace card resource is registered automatically. Add a new custom card to your dashboard using the visual editor or YAML:
+### 2. Configure the Integration
 
-### Card parameters
+1. Go to **Settings → Devices & Services → Add Integration**
+2. Search for **Immich Slideshow**
+3. Fill in the form and click **Submit**
 
-Parameter name | Required | Default value | Description
---- | --- | ---- | ---
-slideshow_interval | NO | 10 | Time (in seconds) between images (minimum 6)
-height | NO | 100% | Card height (e.g. `500px`, `100vh`)
-albums | NO | all images | A list of album IDs to restrict the slideshow to
+| Field | Description |
+|---|---|
+| **Host** | Your Immich server URL (e.g. `http://192.168.1.10:2283`) |
+| **API Key** | The key created in the previous step |
+| **Batch size** | Number of images fetched per batch (default: `50`, max: `1000`) |
+| **Default image size** | `thumbnail` (~50 kB, fast) or `preview` (~300 kB, higher quality) |
+| **Refill threshold** | Background cache refill triggers when this many images remain (default: `3`) |
 
-### YAML Configuration Example
+> [!TIP]
+> You can update these settings at any time via **Settings → Devices & Services → Immich Slideshow → Configure** — no need to delete and re-add the integration.
+
+### 3. Add the Card to your Dashboard
+
+The Lovelace card resource is registered automatically after setup. Add a new card via the visual editor or YAML:
 
 ```yaml
 type: custom:immich-slideshow
 slideshow_interval: 10
-height: 500px
+height: 500
 albums:
-  - 'first_album_id_here'
-  - 'second_album_id_here'
+  - your_album_id_here
+  - another_album_id_here
 ```
+
+#### Card Parameters
+
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `slideshow_interval` | No | `10` | Seconds between images (minimum `6`) |
+| `height` | No | `400` | Card height in pixels — enter a number, e.g. `400` for 400 px |
+| `albums` | No | All photos | List of Immich album IDs to restrict the slideshow to |
 
 > [!NOTE]
-> The `host` and `apikey` are no longer configured in the card YAML. They are securely stored by the integration backend (set up in Step 1 above).
+> The server URL and API key are securely stored by the integration backend and never appear in card YAML.
 
-# How it works
+---
 
-Unlike a traditional Lovelace card that calls the Immich API directly from your browser, this integration acts as a **proxy**:
+## How It Works
+
+The card never contacts your Immich server directly. All image requests go through Home Assistant:
 
 ```
-Browser → Home Assistant backend → Immich server
+Lovelace card  →  Home Assistant backend  →  Immich server
 ```
 
-The browser only ever talks to Home Assistant (same origin), which eliminates all CORS issues regardless of network setup.
+This eliminates CORS issues regardless of your network configuration, and keeps your API key out of the browser.
 
-# Preview in Chromium browser (Kiosk mode)
-
-Run Chromium using the following commands:
-
-1. Linux:
-
-```console
-/usr/bin/chromium-browser --noerrdialogs --disable-infobars --ignore-certificate-errors --allow-running-insecure-content --user-data-dir=PATH_TO_PROFILE_DIRECTORY --kiosk DASHBOARD_URL
-```
-
-2. Windows:
-```console
-start "C:\Program Files\Google\Chrome\Application\" chrome.exe --user-data-dir=PATH_TO_PROFILE_DIRECTORY --kiosk DASHBOARD_URL
-```
-> [!TIP]
-> Replace `PATH_TO_PROFILE_DIRECTORY` and `DASHBOARD_URL` with valid values.
+**Under the hood:**
+- A batch of random asset IDs is fetched from Immich and cached in HA memory
+- Each slideshow tick pops one ID from the cache and fetches its thumbnail
+- When the cache drops below the configured threshold, a background task silently refills it — the user never waits
+- Images are decoded before the crossfade starts, preventing any resize or layout flash
+- Blob URLs are revoked as soon as they are no longer needed
 
 
+---
 
-
-[![buycoffee](https://buycoffee.to/static/img/share/share-button-primary.png)](https://buycoffee.to/mulder82)
+[![Buy me a coffee](https://cdn.buymeacoffee.com/buttons/default-orange.png)](https://buymeacoffee.com/miloune)
