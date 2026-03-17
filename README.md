@@ -88,6 +88,22 @@ albums:
 
 ---
 
+## Local Development
+
+If you want to test your changes locally, a `docker-compose.yml` is provided at the root of the repository. It starts a Home Assistant instance with the `custom_components` folder pre-loaded as a volume.
+
+1. Start the stack:
+   ```bash
+   docker compose up -d
+   ```
+2. Open Home Assistant at `http://localhost:8123`.
+3. After any code modification, you just need to restart Home Assistant via the UI (**Settings → System → Restart**) or via command line:
+   ```bash
+   docker compose restart homeassistant
+   ```
+
+---
+
 ## How It Works
 
 The card never contacts your Immich server directly. All image requests go through Home Assistant:
