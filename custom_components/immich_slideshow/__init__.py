@@ -13,37 +13,55 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 FRONTEND_JS_URL = "/api/immich_slideshow/frontend/immich-slideshow.js"
+FRONTEND_CACHE_KEY = "frontend_js_content"
 
 
 class ImmichFrontendView(HomeAssistantView):
-    """Serve the Lovelace JS card file from inside the custom_components folder."""
+    """Serve the Lovelace JS card file from memory."""
 
     url = FRONTEND_JS_URL
     name = "api:immich_slideshow:frontend"
     requires_auth = False  # Lovelace resources are loaded unauthenticated
 
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the view."""
+        self.hass = hass
+
     async def get(self, request: web.Request) -> web.Response:
-        """Return the JS file content."""
-        js_path = os.path.join(os.path.dirname(__file__), "frontend", "immich-slideshow.js")
-        try:
-            with open(js_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            return web.Response(
-                text=content,
-                content_type="application/javascript",
-                headers={"Cache-Control": "no-cache"},
-            )
-        except OSError as exc:
-            _LOGGER.error("Could not read frontend JS: %s", exc)
+        """Return the cached JS content."""
+        content = self.hass.data[DOMAIN].get(FRONTEND_CACHE_KEY)
+        if content is None:
+            _LOGGER.error("Frontend JS content not found in cache")
             return web.Response(status=404)
+
+        return web.Response(
+            text=content,
+            content_type="application/javascript",
+            headers={"Cache-Control": "no-cache"},
+        )
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Immich Slideshow component (runs at startup, before config entries)."""
     hass.data.setdefault(DOMAIN, {})
 
+    # Load JS content into memory to avoid blocking I/O in the event loop
+    js_path = os.path.join(os.path.dirname(__file__), "frontend", "immich-slideshow.js")
+
+    def _load_js():
+        try:
+            with open(js_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except OSError as exc:
+            _LOGGER.error("Could not read frontend JS: %s", exc)
+            return None
+
+    js_content = await hass.async_add_executor_job(_load_js)
+    if js_content:
+        hass.data[DOMAIN][FRONTEND_CACHE_KEY] = js_content
+
     # Register HTTP views at startup so the card JS is always available
-    hass.http.register_view(ImmichFrontendView())
+    hass.http.register_view(ImmichFrontendView(hass))
     hass.http.register_view(ImmichRandomImageView(hass))
 
     # Register the Lovelace resource so the card appears in the UI
