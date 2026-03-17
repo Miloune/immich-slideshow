@@ -139,6 +139,26 @@ class ImmichSlideshow extends LitElement {
     return 1;
   }
 
+  disconnectedCallback() {
+    super.disconnectedCallback();
+
+    if (this._slideshow != null) {
+      clearTimeout(this._slideshow);
+      this._slideshow = null;
+    }
+
+    if (this._currentBlobUrl) {
+      URL.revokeObjectURL(this._currentBlobUrl);
+      this._currentBlobUrl = null;
+    }
+    if (this._previousBlobUrl) {
+      URL.revokeObjectURL(this._previousBlobUrl);
+      this._previousBlobUrl = null;
+    }
+
+    this._log("Slideshow stopped and blobs revoked.");
+  }
+
   //--------------------------------------------------------------------------------------------------
   // Image fetching via Home Assistant backend proxy (no CORS!)
 
