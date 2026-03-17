@@ -8,7 +8,14 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_API_KEY, CONF_HOST, CONF_SEARCH_BATCH_SIZE, DOMAIN
+from .const import (
+    CONF_API_KEY,
+    CONF_HOST,
+    CONF_SEARCH_BATCH_SIZE,
+    CONF_DEFAULT_SIZE,
+    CONF_REFILL_THRESHOLD,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -16,16 +23,17 @@ _LOGGER = logging.getLogger(__name__)
 # "thumbnail" → ~50 kB  (fast, lower quality)
 # "preview"   → ~300 kB (good quality, still 10-20× smaller than original)
 VALID_SIZES = {"thumbnail", "preview"}
-DEFAULT_SIZE = "thumbnail"
 
 # Shared ClientSession key in hass.data
 SESSION_KEY = "aiohttp_session"
 
-# When the cache drops to or below this count, trigger a background refill.
-REFILL_THRESHOLD = 3
-
 # Set of cache_keys currently being refilled — prevents duplicate tasks.
 REFILLING_KEY = "refilling"
+
+
+def _entry_value(entry, key: str, default):
+    """Read from options first (set via Configure), then initial data, then default."""
+    return entry.options.get(key, entry.data.get(key, default))
 
 
 def _get_session(hass: HomeAssistant) -> aiohttp.ClientSession:
@@ -56,10 +64,10 @@ async def _refill_cache(
         if entry is None:
             return
 
-        host       = entry.data[CONF_HOST].rstrip("/")
-        api_key    = entry.data[CONF_API_KEY]
+        host       = _entry_value(entry, CONF_HOST, "").rstrip("/")
+        api_key    = _entry_value(entry, CONF_API_KEY, "")
         headers    = {"X-Api-Key": api_key, "Content-Type": "application/json"}
-        batch_size = entry.data.get(CONF_SEARCH_BATCH_SIZE, 50)
+        batch_size = _entry_value(entry, CONF_SEARCH_BATCH_SIZE, 50)
 
         search_body: dict[str, Any] = {"type": "IMAGE", "size": batch_size}
         if album_ids:
@@ -79,8 +87,6 @@ async def _refill_cache(
                 return
             results = await resp.json()
             if results:
-                # Append to whatever remains — don't overwrite to avoid losing items
-                # that were added while we were fetching.
                 hass_data.setdefault(cache_key, []).extend(
                     item["id"] for item in results
                 )
@@ -113,22 +119,25 @@ class ImmichRandomImageView(HomeAssistantView):
         if entry is None:
             return web.Response(status=503, text="Integration not configured.")
 
-        host    = entry.data[CONF_HOST].rstrip("/")
-        api_key = entry.data[CONF_API_KEY]
+        host    = _entry_value(entry, CONF_HOST, "").rstrip("/")
+        api_key = _entry_value(entry, CONF_API_KEY, "")
         headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
 
         # --- Query params ---------------------------------------------------
         # ?albums=id1,id2   optional album filter
-        # ?size=thumbnail   thumbnail | preview  (default: thumbnail)
+        # ?size=thumbnail   thumbnail | preview  (overrides integration default)
         albums_param = request.rel_url.query.get("albums", "")
         album_ids    = [a for a in albums_param.split(",") if a]
 
-        size = request.rel_url.query.get("size", DEFAULT_SIZE)
+        # Size: query param > integration option > fallback default
+        default_size = _entry_value(entry, CONF_DEFAULT_SIZE, "thumbnail")
+        size = request.rel_url.query.get("size", default_size)
         if size not in VALID_SIZES:
-            size = DEFAULT_SIZE
+            size = default_size
+
+        refill_threshold = _entry_value(entry, CONF_REFILL_THRESHOLD, 3)
 
         cache_key = f"cache_{','.join(sorted(album_ids)) if album_ids else 'all'}"
-
         hass_data = self.hass.data[DOMAIN]
         hass_data.setdefault(cache_key, [])
 
@@ -143,7 +152,7 @@ class ImmichRandomImageView(HomeAssistantView):
                     return web.Response(status=404, text="No images found.")
 
             # 2. Proactive background refill when running low -------------------
-            elif len(hass_data[cache_key]) <= REFILL_THRESHOLD:
+            elif len(hass_data[cache_key]) <= refill_threshold:
                 self.hass.async_create_task(
                     _refill_cache(self.hass, cache_key, album_ids)
                 )
