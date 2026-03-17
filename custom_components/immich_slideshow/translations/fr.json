@@ -7,7 +7,9 @@
         "data": {
           "host": "URL du serveur Immich",
           "apikey": "Clé API Immich",
-          "search_batch_size": "Nombre d'images aléatoires à récupérer d'un coup"
+          "search_batch_size": "Nombre d'images aléatoires à récupérer d'un coup",
+          "default_size": "Taille d'image par défaut",
+          "refill_threshold": "Seuil de recharge du cache"
         }
       }
     },
@@ -18,6 +20,20 @@
     },
     "abort": {
       "already_configured": "Immich Slideshow est déjà configuré."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configurer Immich Slideshow",
+        "data": {
+          "host": "URL du serveur Immich",
+          "apikey": "Clé API Immich",
+          "search_batch_size": "Nombre d'images aléatoires à récupérer d'un coup",
+          "default_size": "Taille d'image par défaut",
+          "refill_threshold": "Seuil de recharge du cache"
+        }
+      }
     }
   }
 }
