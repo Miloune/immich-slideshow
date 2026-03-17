@@ -1,20 +1,31 @@
 # immich-slideshow
 Custom card for Home Assistant's UI LoveLace which will display images slideshow from Immich server. Card is designed for Chromium running in kiosk mode.
 
-![Screenshot](https://github.com/mulder82/immich-slideshow/raw/master/screenshots/preview.gif)
+![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/preview.gif)
 
-![Screenshot](https://github.com/mulder82/immich-slideshow/raw/master/screenshots/preview2.gif)
+![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/preview2.gif)
 
 # Plugin installation
-1. Download immich-slideshow.js and placeholder.png files,
-2. Install plugin (For more details, see [Thomas Loven's Install Guide](https://github.com/thomasloven/hass-config/wiki/Lovelace-Plugins))
+
+## Method 1: HACS (Recommended)
+
+1. Open **HACS** in Home Assistant.
+2. Go to **Frontend**, click the three dots in the top right corner, and select **Custom repositories**.
+3. Add the URL of this repository (`https://github.com/Miloune/immich-slideshow`) and select **Dashboard** as the category.
+4. Click **Add**, find **Immich Slideshow** in the list, and download it.
+5. Reload your browser if prompted.
+
+## Method 2: Manual Installation
+
+1. Download the `immich-slideshow.js` file.
+2. Install the plugin (For more details, see [Thomas Loven's Install Guide](https://github.com/thomasloven/hass-config/wiki/Lovelace-Plugins)).
 > [!IMPORTANT]  
-> Place downloaded files under /config/www/immich-slideshow/ directory.
+> Place the downloaded file under the `/config/www/immich-slideshow/` directory.
 
 # Immich server configuration
 1. Login into your immich server and create new apiKey
 
-![Screenshot](https://github.com/mulder82/immich-slideshow/raw/master/screenshots/apikey.jpg)
+![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/apikey.jpg)
 
 # HomeAssistant configuration
 1. Login into HomeAssistant server and add new custom card to the dashboard with the following configuration parameters:

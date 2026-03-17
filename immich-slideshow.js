@@ -1,5 +1,5 @@
 var ImmichSlideshowVersion = "1.3.0";
-var PlaceholderSrc = "/local/immich-slideshow/placeholder.png";
+var PlaceholderSrc = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
 import {
   LitElement,
@@ -40,7 +40,7 @@ class ImmichSlideshow extends LitElement {
 
   _onBottomLoad(e) {
     var bottom = this._getImg("bottom");
-    if (!bottom.src.endsWith(PlaceholderSrc)) {
+    if (bottom.src.startsWith("blob:")) {
       URL.revokeObjectURL(bottom.src);
     }
   }
