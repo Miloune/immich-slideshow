@@ -18,9 +18,14 @@ _LOGGER = logging.getLogger(__name__)
 VALID_SIZES = {"thumbnail", "preview"}
 DEFAULT_SIZE = "thumbnail"
 
-# Shared ClientSession key in hass.data — one session per HA lifetime,
-# reuses TCP connections instead of opening a new one per request.
+# Shared ClientSession key in hass.data
 SESSION_KEY = "aiohttp_session"
+
+# When the cache drops to or below this count, trigger a background refill.
+REFILL_THRESHOLD = 3
+
+# Set of cache_keys currently being refilled — prevents duplicate tasks.
+REFILLING_KEY = "refilling"
 
 
 def _get_session(hass: HomeAssistant) -> aiohttp.ClientSession:
@@ -31,6 +36,65 @@ def _get_session(hass: HomeAssistant) -> aiohttp.ClientSession:
         session = aiohttp.ClientSession()
         hass_data[SESSION_KEY] = session
     return session
+
+
+async def _refill_cache(
+    hass: HomeAssistant,
+    cache_key: str,
+    album_ids: list[str],
+) -> None:
+    """Background task: fetch a new batch of asset IDs and append to cache."""
+    hass_data = hass.data[DOMAIN]
+    refilling: set = hass_data.setdefault(REFILLING_KEY, set())
+
+    if cache_key in refilling:
+        return  # already in progress
+    refilling.add(cache_key)
+
+    try:
+        entry = _get_config_entry(hass)
+        if entry is None:
+            return
+
+        host       = entry.data[CONF_HOST].rstrip("/")
+        api_key    = entry.data[CONF_API_KEY]
+        headers    = {"X-Api-Key": api_key, "Content-Type": "application/json"}
+        batch_size = entry.data.get(CONF_SEARCH_BATCH_SIZE, 50)
+
+        search_body: dict[str, Any] = {"type": "IMAGE", "size": batch_size}
+        if album_ids:
+            search_body["albumIds"] = album_ids
+
+        _LOGGER.debug("Background refill: fetching %d IDs for %s", batch_size, cache_key)
+
+        session = _get_session(hass)
+        async with session.post(
+            f"{host}/api/search/random",
+            json=search_body,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            if resp.status != 200:
+                _LOGGER.error("Background refill failed: HTTP %d", resp.status)
+                return
+            results = await resp.json()
+            if results:
+                # Append to whatever remains — don't overwrite to avoid losing items
+                # that were added while we were fetching.
+                hass_data.setdefault(cache_key, []).extend(
+                    item["id"] for item in results
+                )
+                _LOGGER.debug(
+                    "Background refill done: +%d IDs for %s (total: %d)",
+                    len(results),
+                    cache_key,
+                    len(hass_data[cache_key]),
+                )
+
+    except aiohttp.ClientError as exc:
+        _LOGGER.error("Background refill error: %s", exc)
+    finally:
+        refilling.discard(cache_key)
 
 
 class ImmichRandomImageView(HomeAssistantView):
@@ -55,7 +119,7 @@ class ImmichRandomImageView(HomeAssistantView):
 
         # --- Query params ---------------------------------------------------
         # ?albums=id1,id2   optional album filter
-        # ?size=preview     thumbnail | preview  (default: preview)
+        # ?size=thumbnail   thumbnail | preview  (default: thumbnail)
         albums_param = request.rel_url.query.get("albums", "")
         album_ids    = [a for a in albums_param.split(",") if a]
 
@@ -66,42 +130,29 @@ class ImmichRandomImageView(HomeAssistantView):
         cache_key = f"cache_{','.join(sorted(album_ids)) if album_ids else 'all'}"
 
         hass_data = self.hass.data[DOMAIN]
-        if cache_key not in hass_data:
-            hass_data[cache_key] = []
+        hass_data.setdefault(cache_key, [])
 
         session = _get_session(self.hass)
 
         try:
-            # 1. Refill cache when empty -----------------------------------------
+            # 1. Blocking refill only when cache is completely empty -------------
             if not hass_data[cache_key]:
-                batch_size  = entry.data.get(CONF_SEARCH_BATCH_SIZE, 50)
-                search_body: dict[str, Any] = {"type": "IMAGE", "size": batch_size}
-                if album_ids:
-                    search_body["albumIds"] = album_ids
+                _LOGGER.debug("Cache empty, blocking refill for %s", cache_key)
+                await _refill_cache(self.hass, cache_key, album_ids)
+                if not hass_data[cache_key]:
+                    return web.Response(status=404, text="No images found.")
 
-                _LOGGER.debug("Fetching new batch of %d IDs for %s", batch_size, cache_key)
+            # 2. Proactive background refill when running low -------------------
+            elif len(hass_data[cache_key]) <= REFILL_THRESHOLD:
+                self.hass.async_create_task(
+                    _refill_cache(self.hass, cache_key, album_ids)
+                )
 
-                async with session.post(
-                    f"{host}/api/search/random",
-                    json=search_body,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=15),
-                ) as resp:
-                    if resp.status != 200:
-                        _LOGGER.error("Immich search/random failed: %d", resp.status)
-                        return web.Response(status=resp.status)
-                    results = await resp.json()
-                    if not results:
-                        return web.Response(status=404, text="No images found.")
-                    hass_data[cache_key] = [item["id"] for item in results]
-
-            # 2. Consume next asset ID from cache --------------------------------
-            # Retry loop: skip any asset that returns a non-200 status (deleted, etc.)
+            # 3. Consume next asset ID — retry up to 5 on non-200 --------------
             image_data   = None
             content_type = "image/jpeg"
-            max_attempts = min(5, len(hass_data[cache_key]))
 
-            for _ in range(max_attempts):
+            for _ in range(min(5, len(hass_data[cache_key]))):
                 if not hass_data[cache_key]:
                     break
 
@@ -117,10 +168,7 @@ class ImmichRandomImageView(HomeAssistantView):
                         content_type = img_resp.headers.get("Content-Type", "image/jpeg")
                         image_data   = await img_resp.read()
                         break
-                    # Asset gone or inaccessible — log and try the next one
-                    _LOGGER.warning(
-                        "Skipping asset %s (HTTP %d)", asset_id, img_resp.status
-                    )
+                    _LOGGER.warning("Skipping asset %s (HTTP %d)", asset_id, img_resp.status)
 
             if image_data is None:
                 return web.Response(status=404, text="No accessible image found.")
@@ -132,7 +180,6 @@ class ImmichRandomImageView(HomeAssistantView):
         return web.Response(
             body=image_data,
             content_type=content_type,
-            # Tell the browser (and HA) not to cache — each request is random.
             headers={"Cache-Control": "no-store"},
         )
 
@@ -141,3 +188,4 @@ def _get_config_entry(hass: HomeAssistant):
     """Return the first config entry for the integration."""
     entries = hass.config_entries.async_entries(DOMAIN)
     return entries[0] if entries else None
+    
