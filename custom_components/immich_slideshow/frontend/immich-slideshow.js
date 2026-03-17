@@ -120,7 +120,7 @@ class ImmichSlideshow extends LitElement {
   }
 
   setConfig(config) {
-    var isconfig = Object.create(config);
+    const isconfig = { ...config };
 
     if (!isconfig.height)
       isconfig.height = "100%";
@@ -275,11 +275,9 @@ class ImmichSlideshowEditor extends LitElement {
   }
 
   _valueChanged(ev) {
-    if (!this._config || !this.hass) {
-      return;
-    }
+    if (!this._config || !this.hass) return;
     if (ev.detail.value) {
-      this._config = { ...ev.detail.value };
+      this._config = { ...this._config, ...ev.detail.value };
     }
     const event = new CustomEvent("config-changed", {
       detail: { config: this._config },
