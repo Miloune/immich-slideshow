@@ -47,14 +47,14 @@ class ImmichSlideshow extends LitElement {
     return this.renderRoot.querySelector(".wrapper img." + className);
   }
 
-  _currentBlobUrl = null;
-
   _onBottomLoad(e) {
     // No-op, we manage blobs in _nextImage
   }
 
   _imgErrorCount = 0;
   _maxImgErrorCount = 10;
+  _previousBlobUrl = null;
+  _currentBlobUrl = null;
 
   _onTopError(e) {
     this._log("Image load error on top element.");
@@ -69,8 +69,16 @@ class ImmichSlideshow extends LitElement {
   }
 
   _onTopTransitionEnd(e) {
+    if (e.propertyName !== 'opacity') return;
+
     var top = this._getImg("top");
     var bottom = this._getImg("bottom");
+
+    if (this._previousBlobUrl) {
+      URL.revokeObjectURL(this._previousBlobUrl);
+      this._previousBlobUrl = null;
+    }
+
     bottom.src = top.src;
     top.classList.replace("visible", "hidden");
   }
@@ -97,11 +105,8 @@ class ImmichSlideshow extends LitElement {
 
     try {
       const nextUrl = await this._getNextImageURL();
-      
-      // Revoke the OLD blob if it exists, NOW that we have a new one ready
-      if (this._currentBlobUrl) {
-        URL.revokeObjectURL(this._currentBlobUrl);
-      }
+
+      this._previousBlobUrl = this._currentBlobUrl;
       this._currentBlobUrl = nextUrl;
 
       var top = this._getImg("top");
@@ -184,7 +189,7 @@ class ImmichSlideshow extends LitElement {
     }
 
     img.visible {
-     transition: all 5s ease-in;
+     transition: opacity 5s ease-in, filter 5s ease-in;
      opacity: 1;
      filter: grayscale(0%);
     }
