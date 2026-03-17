@@ -109,6 +109,11 @@ class ImmichSlideshow extends LitElement {
     if (!isconfig.slideshow_interval || isconfig.slideshow_interval < 6)
       isconfig.slideshow_interval = 6;
 
+    let albums = isconfig.albums;
+    if (albums) {
+      isconfig.albums = Array.isArray(albums) ? albums : [albums];
+    }
+
     this.config = isconfig;
   }
 
@@ -143,6 +148,10 @@ class ImmichSlideshow extends LitElement {
 
   async _getRandomID() {
     let reqbody={type:"IMAGE",size:1};
+
+    if (this.config.albums) {
+      reqbody.albumIds = this.config.albums;
+    }
 
     return this._apiCall("search/random","POST",reqbody)
       .then(response => response.json())

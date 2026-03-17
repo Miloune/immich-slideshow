@@ -25,6 +25,7 @@ host | YES | - | URL to immich server
 apikey | YES | - | Immich apiKey
 slideshow_interval | NO | 6 | Time (in seconds) after new image is loaded (minimum 6)
 height| NO | auto | Card height (eg. 500px)
+albums | NO | - | Single album ID or list of album IDs to restrict the slideshow to
 
 # Preview in chromium browser
 Run chromium using fallowing commands:
