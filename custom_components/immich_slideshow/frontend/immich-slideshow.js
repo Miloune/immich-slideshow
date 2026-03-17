@@ -76,6 +76,11 @@ class ImmichSlideshow extends LitElement {
     });
   }
 
+  shouldUpdate(changedProperties) {
+    if (changedProperties.size === 1 && changedProperties.has('hass')) return false;
+    return true;
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
 
@@ -218,7 +223,7 @@ class ImmichSlideshow extends LitElement {
         left: 0;
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        object-fit: contain;
         opacity: 0;
         z-index: 0;
         transition: opacity 3s ease-in-out;
