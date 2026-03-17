@@ -91,12 +91,10 @@ async def _register_lovelace_resource(hass: HomeAssistant) -> None:
             _LOGGER.warning("Lovelace not found, cannot auto-register resource.")
             return
 
-        from homeassistant.components.lovelace import resources as lovelace_resources  # noqa: PLC0415
-
-        resources = lovelace_resources.ResourceStorageCollection(hass, lovelace)
+        resources = lovelace.resources
         await resources.async_load()
-        existing = [r["url"] for r in resources.async_items()]
 
+        existing = [r["url"] for r in resources.async_items()]
         if FRONTEND_JS_URL not in existing:
             await resources.async_create_item(
                 {"res_type": "module", "url": FRONTEND_JS_URL}
