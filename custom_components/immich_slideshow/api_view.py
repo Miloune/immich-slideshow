@@ -16,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 # "thumbnail" → ~50 kB  (fast, lower quality)
 # "preview"   → ~300 kB (good quality, still 10-20× smaller than original)
 VALID_SIZES = {"thumbnail", "preview"}
-DEFAULT_SIZE = "preview"
+DEFAULT_SIZE = "thumbnail"
 
 # Shared ClientSession key in hass.data — one session per HA lifetime,
 # reuses TCP connections instead of opening a new one per request.
