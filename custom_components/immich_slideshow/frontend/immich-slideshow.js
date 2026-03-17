@@ -1,4 +1,4 @@
-var ImmichSlideshowVersion = "2.0.0";
+var ImmichSlideshowVersion = "2.1.0";
 var PlaceholderSrc = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
 import {
@@ -7,13 +7,25 @@ import {
   css,
 } from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 
+// ─── ImmichSlideshow ──────────────────────────────────────────────────────────
+
 class ImmichSlideshow extends LitElement {
 
   static get properties() {
     return {
       hass: {},
-      config: {}
+      config: {},
+      // Reactive slot state — LitElement re-renders from these, not from direct DOM manipulation.
+      // This survives the frequent hass updates without wiping img.src or classes.
+      _slotA: { state: true },
+      _slotB: { state: true },
     };
+  }
+
+  constructor() {
+    super();
+    this._slotA = { src: PlaceholderSrc, active: false };
+    this._slotB = { src: PlaceholderSrc, active: false };
   }
 
   static getConfigElement() {
@@ -30,94 +42,143 @@ class ImmichSlideshow extends LitElement {
 
   render() {
     return html`
-     <ha-card style="overflow:hidden;">
-      <div class="wrapper" style="height:${this.config.height}">
-       <img class="bottom" @load="${this._onBottomLoad}" src="${PlaceholderSrc}" alt="immich-slideshow">
-       <img class="top hidden" @error="${this._onTopError}" @load="${this._onTopLoad}" @transitionend="${this._onTopTransitionEnd}" src="${PlaceholderSrc}" alt="immich-slideshow">
-      </div>
-     </ha-card>
+      <ha-card style="overflow:hidden;">
+        <div class="wrapper" style="height:${this.config.height}">
+          <img
+            src="${this._slotA.src}"
+            class="${this._slotA.active ? 'active' : ''}"
+            alt="immich-slideshow"
+          >
+          <img
+            src="${this._slotB.src}"
+            class="${this._slotB.active ? 'active' : ''}"
+            alt="immich-slideshow"
+          >
+        </div>
+      </ha-card>
     `;
   }
 
+  // ── Internal state (not reactive, no re-render needed) ─────────────────────
+
+  _currentSlot = 'b';  // 'b' so first advance switches to 'a'
+  _slotBlobs = { a: null, b: null };
+  _prefetchedUrl = null;
+  _isAdvancing = false;
+  _timer = null;
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
   firstUpdated() {
-    this._doSlideshow();
+    this._advance().then(() => {
+      this._scheduleNext();
+      this._prefetch();
+    });
   }
 
-  _getImg(className) {
-    return this.renderRoot.querySelector(".wrapper img." + className);
-  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
 
-  _onBottomLoad(e) {
-    // No-op, we manage blobs in _nextImage
-  }
-
-  _imgErrorCount = 0;
-  _maxImgErrorCount = 10;
-  _previousBlobUrl = null;
-  _currentBlobUrl = null;
-
-  _onTopError(e) {
-    this._log("Image load error on top element.");
-    this._imgErrorCount++;
-    // We just hide it and let the next scheduled slideshow attempt handle it
-    var top = this._getImg("top");
-    top.classList.replace("visible", "hidden");
-  }
-
-  _onTopLoad(e) {
-    this._imgErrorCount = 0;
-  }
-
-  _onTopTransitionEnd(e) {
-    if (e.propertyName !== 'opacity') return;
-
-    var top = this._getImg("top");
-    var bottom = this._getImg("bottom");
-
-    if (this._previousBlobUrl) {
-      URL.revokeObjectURL(this._previousBlobUrl);
-      this._previousBlobUrl = null;
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = null;
     }
 
-    bottom.src = top.src;
-    top.classList.replace("visible", "hidden");
-  }
-
-  _slideshow = null;
-  _doSlideshow() {
-    if (this._slideshow != null) {
-      clearTimeout(this._slideshow);
-      this._slideshow = null;
+    for (const slot of ['a', 'b']) {
+      if (this._slotBlobs[slot]) {
+        URL.revokeObjectURL(this._slotBlobs[slot]);
+        this._slotBlobs[slot] = null;
+      }
     }
 
-    this._nextImage();
+    if (this._prefetchedUrl) {
+      URL.revokeObjectURL(this._prefetchedUrl);
+      this._prefetchedUrl = null;
+    }
 
-    this._slideshow = setTimeout(() => {
-      this._slideshow = null;
-      this._doSlideshow();
+    this._log("Slideshow stopped, all blobs revoked.");
+  }
+
+  // ── Slideshow loop ─────────────────────────────────────────────────────────
+
+  _scheduleNext() {
+    this._timer = setTimeout(async () => {
+      this._timer = null;
+      await this._advance();
+      this._scheduleNext();
+      this._prefetch();
     }, this.config.slideshow_interval * 1000);
   }
 
-  _isFetching = false;
-  async _nextImage() {
-    if (this._isFetching) return;
-    this._isFetching = true;
+  async _advance() {
+    if (this._isAdvancing) return;
+    this._isAdvancing = true;
 
     try {
-      const nextUrl = await this._getNextImageURL();
+      const nextSlot = this._currentSlot === 'a' ? 'b' : 'a';
+      const currentSlot = this._currentSlot;
 
-      this._previousBlobUrl = this._currentBlobUrl;
-      this._currentBlobUrl = nextUrl;
+      // Use pre-fetched URL if available, otherwise fetch now.
+      const url = this._prefetchedUrl ?? await this._fetchImageUrl();
+      this._prefetchedUrl = null;
 
-      var top = this._getImg("top");
-      top.src = nextUrl;
-      top.classList.replace("hidden", "visible");
+      if (!url) return;
+
+      // Pre-load via a throwaway Image object to decode dimensions BEFORE
+      // updating reactive state. This prevents any resize flash on first paint.
+      await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = resolve;
+        img.onerror = () => reject(new Error("Image decode failed"));
+        img.src = url;
+      });
+
+      // Revoke the blob previously held by the incoming slot.
+      if (this._slotBlobs[nextSlot]) {
+        URL.revokeObjectURL(this._slotBlobs[nextSlot]);
+      }
+      this._slotBlobs[nextSlot] = url;
+      this._currentSlot = nextSlot;
+
+      // Update reactive state → LitElement re-renders safely.
+      if (nextSlot === 'a') {
+        this._slotA = { src: url, active: true };
+        this._slotB = { ...this._slotB, active: false };
+      } else {
+        this._slotB = { src: url, active: true };
+        this._slotA = { ...this._slotA, active: false };
+      }
+
     } catch (e) {
-      this._log("Error fetching image: " + e.message);
+      this._log("Advance error: " + e.message);
     } finally {
-      this._isFetching = false;
+      this._isAdvancing = false;
     }
   }
+
+  async _prefetch() {
+    if (this._prefetchedUrl) return;
+    try {
+      this._prefetchedUrl = await this._fetchImageUrl();
+    } catch (e) {
+      this._log("Prefetch error: " + e.message);
+    }
+  }
+
+  // ── Network ────────────────────────────────────────────────────────────────
+
+  async _fetchImageUrl() {
+    let url = "/api/immich_slideshow/random_image";
+    if (this.config.albums?.length > 0) {
+      url += "?albums=" + this.config.albums.join(",");
+    }
+    const response = await this.hass.fetchWithAuth(url);
+    if (!response.ok) throw new Error(`Immich proxy error: ${response.status}`);
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  // ── Config ─────────────────────────────────────────────────────────────────
 
   setConfig(config) {
     const isconfig = { ...config };
@@ -127,7 +188,7 @@ class ImmichSlideshow extends LitElement {
     if (!isconfig.slideshow_interval || isconfig.slideshow_interval < 6)
       isconfig.slideshow_interval = 6;
 
-    let albums = isconfig.albums;
+    const albums = isconfig.albums;
     if (albums) {
       isconfig.albums = Array.isArray(albums) ? albums : [albums];
     }
@@ -135,92 +196,41 @@ class ImmichSlideshow extends LitElement {
     this.config = isconfig;
   }
 
-  getCardSize() {
-    return 1;
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-
-    if (this._slideshow != null) {
-      clearTimeout(this._slideshow);
-      this._slideshow = null;
-    }
-
-    if (this._currentBlobUrl) {
-      URL.revokeObjectURL(this._currentBlobUrl);
-      this._currentBlobUrl = null;
-    }
-    if (this._previousBlobUrl) {
-      URL.revokeObjectURL(this._previousBlobUrl);
-      this._previousBlobUrl = null;
-    }
-
-    this._log("Slideshow stopped and blobs revoked.");
-  }
-
-  //--------------------------------------------------------------------------------------------------
-  // Image fetching via Home Assistant backend proxy (no CORS!)
-
-  async _getNextImageURL() {
-    let url = "/api/immich_slideshow/random_image";
-
-    if (this.config.albums && this.config.albums.length > 0) {
-      url += "?albums=" + this.config.albums.join(",");
-    }
-
-    const response = await this.hass.fetchWithAuth(url);
-    if (!response.ok) {
-      throw new Error(`Immich proxy error: ${response.status}`);
-    }
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
-  }
-
-  //--------------------------------------------------------------------------------------------------
-  //Common functions
+  getCardSize() { return 1; }
 
   _log(message) {
     console.log(`Immich-Slideshow -> ${message}`);
   }
 
+  // ── Styles ─────────────────────────────────────────────────────────────────
+
   static get styles() {
     return css`
-    .wrapper {
-     position: relative;
-     width: 100%;
-     overflow: hidden;
-    }
+      .wrapper {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+      }
 
-    img {
-     width: 100%;
-     height: 100%;
-     object-fit: cover;
-    }
+      img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0;
+        z-index: 0;
+        transition: opacity 3s ease-in-out;
+      }
 
-    img.bottom {
-     position: relative;
-    }
-
-    img.top {
-     position: absolute;
-     top: 0;
-     left: 0;
-    }
-
-    img.visible {
-     transition: opacity 5s ease-in, filter 5s ease-in;
-     opacity: 1;
-     filter: grayscale(0%);
-    }
-
-    img.hidden {
-     transition: none;
-     opacity: 0;
-     filter: grayscale(100%);
-    }`;
+      img.active {
+        opacity: 1;
+        z-index: 1;
+      }
+    `;
   }
-}//End of ImmichSlideshow class
+}
 
 customElements.define("immich-slideshow", ImmichSlideshow);
 window.customCards = window.customCards || [];
@@ -229,6 +239,8 @@ window.customCards.push({
   name: "Immich Slideshow",
   description: "A custom card that displays a slideshow of images from an Immich server."
 });
+
+// ─── ImmichSlideshowEditor ────────────────────────────────────────────────────
 
 class ImmichSlideshowEditor extends LitElement {
   setConfig(config) {
@@ -239,14 +251,12 @@ class ImmichSlideshowEditor extends LitElement {
     return { hass: {}, _config: {} };
   }
 
-  get _slideshow_interval() { return this._config?.slideshow_interval || 10; }
-  get _height() { return this._config?.height || "100%"; }
-  get _albums() { return this._config?.albums || []; }
+  get _slideshow_interval() { return this._config?.slideshow_interval ?? 10; }
+  get _height() { return this._config?.height ?? "100%"; }
+  get _albums() { return this._config?.albums ?? []; }
 
   render() {
-    if (!this.hass || !this._config) {
-      return html``;
-    }
+    if (!this.hass || !this._config) return html``;
 
     const schema = [
       {
@@ -271,7 +281,7 @@ class ImmichSlideshowEditor extends LitElement {
     const data = {
       slideshow_interval: this._slideshow_interval,
       height: this._height,
-      albums: this._albums
+      albums: this._albums,
     };
 
     return html`
@@ -291,7 +301,7 @@ class ImmichSlideshowEditor extends LitElement {
       height: "Card Height (e.g. 500px, 100vh)",
       albums: "Album IDs (Optional List)"
     };
-    return labels[schema.name] || schema.name;
+    return labels[schema.name] ?? schema.name;
   }
 
   _valueChanged(ev) {
@@ -299,21 +309,19 @@ class ImmichSlideshowEditor extends LitElement {
     if (ev.detail.value) {
       this._config = { ...this._config, ...ev.detail.value };
     }
-    const event = new CustomEvent("config-changed", {
+    this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config: this._config },
       bubbles: true,
       composed: true
-    });
-    this.dispatchEvent(event);
+    }));
   }
 }
 
 customElements.define("immich-slideshow-editor", ImmichSlideshowEditor);
 
-//--------------------------------------------------------------------------------------------------
-//INFO
-let infoStyles = [
-  "color: #fff",
-  "background-color: #444"
-].join(";");
-console.info("%cImmichSlideshow Version:" + ImmichSlideshowVersion, infoStyles);
+// ─── Info ─────────────────────────────────────────────────────────────────────
+
+console.info(
+  "%cImmichSlideshow Version:" + ImmichSlideshowVersion,
+  "color:#fff;background-color:#444"
+);
