@@ -7,12 +7,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import CONF_API_KEY, CONF_HOST, DOMAIN
+from .const import CONF_API_KEY, CONF_HOST, CONF_SEARCH_BATCH_SIZE, DOMAIN
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_API_KEY): str,
+        vol.Required(CONF_SEARCH_BATCH_SIZE, default=50): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=1000)
+        ),
     }
 )
 

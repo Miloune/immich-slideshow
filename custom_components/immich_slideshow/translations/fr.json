@@ -6,7 +6,8 @@
         "description": "Entrez les informations de votre serveur Immich.",
         "data": {
           "host": "URL du serveur Immich",
-          "apikey": "Clé API Immich"
+          "apikey": "Clé API Immich",
+          "search_batch_size": "Nombre d'images aléatoires à récupérer d'un coup"
         }
       }
     },
