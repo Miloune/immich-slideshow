@@ -1,14 +1,11 @@
-var ImmichSlideshowVersion = "1.3.0";
+var ImmichSlideshowVersion = "2.0.0";
 var PlaceholderSrc = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
 import {
   LitElement,
   html,
   css,
-} from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js"; 
-//Ta ścieżka poniżej czasem nie działała (była do powyższego importu)
-//"https://unpkg.com/lit-element@2.0.1/lit-element.js?module";
-
+} from "https://cdn.jsdelivr.net/gh/lit/dist@3/core/lit-core.min.js";
 
 class ImmichSlideshow extends LitElement {
 
@@ -25,9 +22,7 @@ class ImmichSlideshow extends LitElement {
 
   static getStubConfig() {
     return {
-      host: "http://your-immich-server-ip:2283",
-      apikey: "",
-      slideshow_interval: 6,
+      slideshow_interval: 10,
       height: "100%",
       albums: []
     };
@@ -109,13 +104,6 @@ class ImmichSlideshow extends LitElement {
   }
 
   setConfig(config) {
-    if (!config.apikey)
-      throw new Error("You need to define an apikey");
-
-    if (!config.host)
-      throw new Error("You need to define an host");
-
-    //Robimy kopię obiektu, inaczej nie można dodawać do niego wlasciwosci
     var isconfig = Object.create(config);
 
     if (!isconfig.height)
@@ -136,54 +124,27 @@ class ImmichSlideshow extends LitElement {
   }
 
   //--------------------------------------------------------------------------------------------------
-  //Immich Server API CALLS
-
-  async _apiCall(url,method="GET",body=null)
-  {
-    let call_url = new URL("api/" + url, this.config.host);
-    //console.log("apiCall => "+call_url);
-    let requestOptions =
-    {
-      method: method,
-      credentials: 'include',
-      headers:
-      {
-        'X-Api-Key': `${this.config.apikey}`
-      }
-    };
-
-    if(body!=null)
-    {
-      requestOptions.body=JSON.stringify(body);
-    }
-
-    return fetch(call_url, requestOptions);
-  }
-
-  async _getRandomID() {
-    let reqbody={type:"IMAGE",size:1};
-
-    if (this.config.albums) {
-      reqbody.albumIds = this.config.albums;
-    }
-
-    return this._apiCall("search/random","POST",reqbody)
-      .then(response => response.json())
-      .then(json => json[0].id);
-  }
+  // Image fetching via Home Assistant backend proxy (no CORS!)
 
   async _getNextImageURL() {
-    var id = await this._getRandomID();
-    return this._apiCall("assets/"+ id +"/thumbnail?size=fullsize").
-      then(response => response.blob()).
-      then(blob => URL.createObjectURL(blob));
+    let url = "/api/immich_slideshow/random_image";
+
+    if (this.config.albums && this.config.albums.length > 0) {
+      url += "?albums=" + this.config.albums.join(",");
+    }
+
+    const response = await this.hass.fetchWithAuth(url);
+    if (!response.ok) {
+      throw new Error(`Immich proxy error: ${response.status}`);
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
   }
 
   //--------------------------------------------------------------------------------------------------
   //Common functions
 
-  _log(message)
-  {
+  _log(message) {
     console.log(`Immich-Slideshow -> ${message}`);
   }
 
@@ -242,9 +203,7 @@ class ImmichSlideshowEditor extends LitElement {
     return { hass: {}, _config: {} };
   }
 
-  get _host() { return this._config.host || ""; }
-  get _apikey() { return this._config.apikey || ""; }
-  get _slideshow_interval() { return this._config.slideshow_interval || 6; }
+  get _slideshow_interval() { return this._config.slideshow_interval || 10; }
   get _height() { return this._config.height || "100%"; }
   get _albums() { return this._config.albums || []; }
 
@@ -255,22 +214,10 @@ class ImmichSlideshowEditor extends LitElement {
 
     const schema = [
       {
-        name: "host",
-        required: true,
-        selector: { text: {} },
-        default: "http://your-immich-server-ip:2283"
-      },
-      {
-        name: "apikey",
-        required: true,
-        selector: { text: { type: "password" } },
-        default: ""
-      },
-      {
         name: "slideshow_interval",
         required: false,
         selector: { number: { min: 6, mode: "box" } },
-        default: 6
+        default: 10
       },
       {
         name: "height",
@@ -286,8 +233,6 @@ class ImmichSlideshowEditor extends LitElement {
     ];
 
     const data = {
-      host: this._host,
-      apikey: this._apikey,
       slideshow_interval: this._slideshow_interval,
       height: this._height,
       albums: this._albums
@@ -301,14 +246,11 @@ class ImmichSlideshowEditor extends LitElement {
         .computeLabel=${this._computeLabel}
         @value-changed=${this._valueChanged}
       ></ha-form>
-      <p style="margin-top: 8px;">Note: Currently, 'albums' expects a list of album IDs. In the visual editor, you might need to input them as a YAML list or JSON array for object selectors, or carefully edit in YAML mode.</p>
     `;
   }
 
   _computeLabel(schema) {
     const labels = {
-      host: "Immich Server URL",
-      apikey: "Immich API Key",
       slideshow_interval: "Slideshow Interval (seconds, min 6)",
       height: "Card Height (e.g. 500px, 100vh)",
       albums: "Album IDs (Optional List)"
@@ -320,21 +262,8 @@ class ImmichSlideshowEditor extends LitElement {
     if (!this._config || !this.hass) {
       return;
     }
-    const target = ev.target;
-    if (this[`_${target.configValue}`] === target.value) {
-      return;
-    }
-    if (target.configValue) {
-      if (target.value === "") {
-        delete this._config[target.configValue];
-      } else {
-        this._config = {
-          ...this._config,
-          [target.configValue]: target.value
-        };
-      }
-    } else if (ev.detail.value) {
-        this._config = { ...ev.detail.value };
+    if (ev.detail.value) {
+      this._config = { ...ev.detail.value };
     }
     const event = new CustomEvent("config-changed", {
       detail: { config: this._config },

@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connexion à Immich",
+        "description": "Entrez les informations de votre serveur Immich.",
+        "data": {
+          "host": "URL du serveur Immich",
+          "apikey": "Clé API Immich"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter au serveur Immich. Vérifiez l'URL et la clé API.",
+      "invalid_auth": "Clé API invalide.",
+      "unknown": "Erreur inattendue."
+    },
+    "abort": {
+      "already_configured": "Immich Slideshow est déjà configuré."
+    }
+  }
+}

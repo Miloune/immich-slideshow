@@ -1,5 +1,5 @@
 # immich-slideshow
-Custom card for Home Assistant's UI LoveLace which will display images slideshow from Immich server. Card is designed for Chromium running in kiosk mode.
+Custom card for Home Assistant's UI Lovelace which displays an image slideshow from an Immich server. The integration runs its API calls through the **Home Assistant backend**, completely avoiding any browser CORS issues.
 
 ![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/preview.gif)
 
@@ -7,43 +7,54 @@ Custom card for Home Assistant's UI LoveLace which will display images slideshow
 
 # Plugin installation
 
+> [!IMPORTANT]
+> This is a **full Custom Integration** (not just a Lovelace plugin). It must be installed into `custom_components/`, not `www/`.
+
 ## Method 1: HACS (Recommended)
 
 1. Open **HACS** in Home Assistant.
-2. Go to **Frontend**, click the three dots in the top right corner, and select **Custom repositories**.
-3. Add the URL of this repository (`https://github.com/Miloune/immich-slideshow`) and select **Dashboard** as the category.
+2. Go to **Integrations**, click the three dots in the top right corner, and select **Custom repositories**.
+3. Add the URL of this repository (`https://github.com/Miloune/immich-slideshow`) and select **Integration** as the category.
 4. Click **Add**, find **Immich Slideshow** in the list, and download it.
-5. Reload your browser if prompted.
+5. **Restart Home Assistant**.
 
 ## Method 2: Manual Installation
 
-1. Download the `immich-slideshow.js` file.
-2. Install the plugin (For more details, see [Thomas Loven's Install Guide](https://github.com/thomasloven/hass-config/wiki/Lovelace-Plugins)).
-> [!IMPORTANT]  
-> Place the downloaded file under the `/config/www/immich-slideshow/` directory.
+1. Download or clone this repository.
+2. Copy the `custom_components/immich_slideshow/` folder into your Home Assistant `config/custom_components/` directory.
+3. **Restart Home Assistant**.
 
 # Immich server configuration
-1. Login into your immich server and create new apiKey
+1. Log in to your Immich server and create a new API Key:
 
 ![Screenshot](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/apikey.jpg)
 
 # HomeAssistant configuration
-1. Login into HomeAssistant server and add new custom card to the dashboard with the following configuration parameters:
+
+## Step 1: Set up the integration
+
+1. Go to **Settings → Devices & Services → Add Integration**.
+2. Search for **Immich Slideshow**.
+3. Enter your Immich server URL and API Key in the form and click **Submit**.
+
+The integration will validate the connection and register itself automatically.
+
+## Step 2: Add the Lovelace card
+
+The Lovelace card resource is registered automatically. Add a new custom card to your dashboard using the visual editor or YAML:
+
+### Card parameters
 
 Parameter name | Required | Default value | Description
 --- | --- | ---- | ---
-host | YES | - | URL to immich server
-apikey | YES | - | Immich apiKey
-slideshow_interval | NO | 6 | Time (in seconds) after new image is loaded (minimum 6)
-height| NO | auto | Card height (eg. 500px)
-albums | NO | - | Single album ID or list of album IDs to restrict the slideshow to
+slideshow_interval | NO | 10 | Time (in seconds) between images (minimum 6)
+height | NO | 100% | Card height (e.g. `500px`, `100vh`)
+albums | NO | all images | A list of album IDs to restrict the slideshow to
 
 ### YAML Configuration Example
 
 ```yaml
 type: custom:immich-slideshow
-host: 'http://192.168.1.100:2283'
-apikey: 'your_immich_api_key_here'
 slideshow_interval: 10
 height: 500px
 albums:
@@ -51,22 +62,35 @@ albums:
   - 'second_album_id_here'
 ```
 
-# Preview in chromium browser
-Run chromium using fallowing commands:
+> [!NOTE]
+> The `host` and `apikey` are no longer configured in the card YAML. They are securely stored by the integration backend (set up in Step 1 above).
+
+# How it works
+
+Unlike a traditional Lovelace card that calls the Immich API directly from your browser, this integration acts as a **proxy**:
+
+```
+Browser → Home Assistant backend → Immich server
+```
+
+The browser only ever talks to Home Assistant (same origin), which eliminates all CORS issues regardless of network setup.
+
+# Preview in Chromium browser (Kiosk mode)
+
+Run Chromium using the following commands:
 
 1. Linux:
 
 ```console
-/usr/bin/chromium-browser --noerrdialogs --disable-infobars --ignore-certificate-errors --allow-running-insecure-content --disable-web-security --user-data-dir=PATH_TO_PROFILE_DIRECORY --kiosk DASHBOARD_URL
+/usr/bin/chromium-browser --noerrdialogs --disable-infobars --ignore-certificate-errors --allow-running-insecure-content --user-data-dir=PATH_TO_PROFILE_DIRECTORY --kiosk DASHBOARD_URL
 ```
 
 2. Windows:
 ```console
-start "C:\Program Files\Google\Chrome\Application\" chrome.exe --allow-running-insecure-content --disable-web-security --user-data-dir=PATH_TO_PROFILE_DIRECORY --kiosk DASHBOARD URL
+start "C:\Program Files\Google\Chrome\Application\" chrome.exe --user-data-dir=PATH_TO_PROFILE_DIRECTORY --kiosk DASHBOARD_URL
 ```
 > [!TIP]
-> Replace PATH_TO_PROFILE_DIRECORY and DASHBOARD_URL with valid values.
-
+> Replace `PATH_TO_PROFILE_DIRECTORY` and `DASHBOARD_URL` with valid values.
 
 
 
