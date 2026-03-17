@@ -35,7 +35,7 @@ class ImmichSlideshow extends LitElement {
   static getStubConfig() {
     return {
       slideshow_interval: 10,
-      height: "100%",
+      height: 400,
       albums: []
     };
   }
@@ -43,7 +43,7 @@ class ImmichSlideshow extends LitElement {
   render() {
     return html`
       <ha-card style="overflow:hidden;">
-        <div class="wrapper" style="height:${this.config.height}">
+        <div class="wrapper" style="height:${this.config.height}px">
           <img
             src="${this._slotA.src}"
             class="${this._slotA.active ? 'active' : ''}"
@@ -188,8 +188,10 @@ class ImmichSlideshow extends LitElement {
   setConfig(config) {
     const isconfig = { ...config };
 
-    if (!isconfig.height)
-      isconfig.height = "100%";
+    if (!isconfig.height || isNaN(isconfig.height))
+      isconfig.height = 400;
+    isconfig.height = parseInt(isconfig.height, 10);
+
     if (!isconfig.slideshow_interval || isconfig.slideshow_interval < 6)
       isconfig.slideshow_interval = 6;
 
@@ -273,8 +275,8 @@ class ImmichSlideshowEditor extends LitElement {
       {
         name: "height",
         required: false,
-        selector: { text: {} },
-        default: "100%"
+        selector: { number: { min: 100, mode: "box", unit_of_measurement: "px" } },
+        default: 400
       },
       {
         name: "albums",
@@ -303,7 +305,7 @@ class ImmichSlideshowEditor extends LitElement {
   _computeLabel(schema) {
     const labels = {
       slideshow_interval: "Slideshow Interval (seconds, min 6)",
-      height: "Card Height (e.g. 500px, 100vh)",
+      height: "Card Height (px, e.g. 500)",
       albums: "Album IDs (Optional List)"
     };
     return labels[schema.name] ?? schema.name;
