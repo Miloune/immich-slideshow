@@ -203,12 +203,12 @@ class ImmichSlideshowEditor extends LitElement {
     return { hass: {}, _config: {} };
   }
 
-  get _slideshow_interval() { return this._config.slideshow_interval || 10; }
-  get _height() { return this._config.height || "100%"; }
-  get _albums() { return this._config.albums || []; }
+  get _slideshow_interval() { return this._config?.slideshow_interval || 10; }
+  get _height() { return this._config?.height || "100%"; }
+  get _albums() { return this._config?.albums || []; }
 
   render() {
-    if (!this.hass) {
+    if (!this.hass || !this._config) {
       return html``;
     }
 
