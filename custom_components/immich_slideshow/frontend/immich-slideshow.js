@@ -19,7 +19,10 @@ class ImmichSlideshow extends LitElement {
       // This survives the frequent hass updates without wiping img.src or classes.
       _slotA: { state: true },
       _slotB: { state: true },
-      _assetDate: { state: true },
+      _modalOpen: { state: true },
+      _modalSrc: { state: true },
+      _modalDate: { state: true },
+      _modalLoading: { state: true },
     };
   }
 
@@ -27,7 +30,10 @@ class ImmichSlideshow extends LitElement {
     super();
     this._slotA = { src: PlaceholderSrc, active: false };
     this._slotB = { src: PlaceholderSrc, active: false };
-    this._assetDate = null;
+    this._modalOpen = false;
+    this._modalSrc = null;
+    this._modalDate = null;
+    this._modalLoading = false;
   }
 
   static getConfigElement() {
@@ -46,7 +52,7 @@ class ImmichSlideshow extends LitElement {
   render() {
     return html`
       <ha-card style="overflow:hidden;">
-        <div class="wrapper" style="height:${this.config.height}px">
+        <div class="wrapper" style="height:${this.config.height}px" @click="${this._openModal}">
           <img
             src="${this._slotA.src}"
             class="${this._slotA.active ? 'active' : ''}"
@@ -57,11 +63,27 @@ class ImmichSlideshow extends LitElement {
             class="${this._slotB.active ? 'active' : ''}"
             alt="immich-slideshow"
           >
-          ${this.config.show_date && this._assetDate ? html`
-            <div class="date-overlay">${this._formatDate(this._assetDate)}</div>
+          ${this.config.show_date && this._activeSlot.date ? html`
+            <div class="date-overlay">${this._formatDate(this._activeSlot.date)}</div>
           ` : ''}
         </div>
       </ha-card>
+
+      ${this._modalOpen ? html`
+        <div class="modal-backdrop" @click="${this._closeModal}">
+          <div class="modal-content" @click="${e => e.stopPropagation()}">
+            <img
+              src="${this._modalSrc}"
+              class="${this._modalLoading ? 'loading' : ''}"
+              alt="immich-slideshow-full"
+            >
+            ${this.config.show_date && this._modalDate ? html`
+              <div class="modal-date">${this._formatDate(this._modalDate)}</div>
+            ` : ''}
+            <button class="modal-close" @click="${this._closeModal}">✕</button>
+          </div>
+        </div>
+      ` : ''}
     `;
   }
 
@@ -130,7 +152,7 @@ class ImmichSlideshow extends LitElement {
       const currentSlot = this._currentSlot;
 
       // Use pre-fetched URL if available, otherwise fetch now.
-      const { blobUrl: url, date } = this._prefetchedUrl ?? await this._fetchImageUrl();
+      const { blobUrl: url, date, assetId } = this._prefetchedUrl ?? await this._fetchImageUrl();
       this._prefetchedUrl = null;
 
       if (!url) return;
@@ -150,14 +172,13 @@ class ImmichSlideshow extends LitElement {
       }
       this._slotBlobs[nextSlot] = url;
       this._currentSlot = nextSlot;
-      this._assetDate = date;
 
       // Update reactive state → LitElement re-renders safely.
       if (nextSlot === 'a') {
-        this._slotA = { src: url, active: true };
+        this._slotA = { src: url, active: true, assetId, date };
         this._slotB = { ...this._slotB, active: false };
       } else {
-        this._slotB = { src: url, active: true };
+        this._slotB = { src: url, active: true, assetId, date };
         this._slotA = { ...this._slotA, active: false };
       }
 
@@ -177,6 +198,46 @@ class ImmichSlideshow extends LitElement {
     }
   }
 
+  get _activeSlot() {
+    return this._slotA.active ? this._slotA : this._slotB;
+  }
+
+  async _openModal() {
+    const { assetId, src, date } = this._activeSlot;
+
+    this._modalSrc = src;
+    this._modalDate = date;
+    this._modalOpen = true;
+    this._modalLoading = true;
+
+    if (assetId) {
+      try {
+        const response = await this.hass.fetchWithAuth(
+          `/api/immich_slideshow/random_image?asset_id=${assetId}&size=preview`
+        );
+        if (response.ok) {
+          const blob = await response.blob();
+          if (this._modalPreviewBlob) URL.revokeObjectURL(this._modalPreviewBlob);
+          this._modalPreviewBlob = URL.createObjectURL(blob);
+          this._modalSrc = this._modalPreviewBlob;
+        }
+      } catch (e) {
+        this._log("Modal preview fetch error: " + e.message);
+      }
+    }
+
+    this._modalLoading = false;
+  }
+
+  _closeModal() {
+    this._modalOpen = false;
+    if (this._modalPreviewBlob) {
+      URL.revokeObjectURL(this._modalPreviewBlob);
+      this._modalPreviewBlob = null;
+    }
+    this._modalSrc = null;
+  }
+
   // ── Network ────────────────────────────────────────────────────────────────
 
   async _fetchImageUrl() {
@@ -186,9 +247,11 @@ class ImmichSlideshow extends LitElement {
     }
     const response = await this.hass.fetchWithAuth(url);
     if (!response.ok) throw new Error(`Immich proxy error: ${response.status}`);
+
     const date = response.headers.get("X-Immich-Date") ?? null;
+    const assetId = response.headers.get("X-Immich-Asset-Id") ?? null;
     const blob = await response.blob();
-    return { blobUrl: URL.createObjectURL(blob), date };
+    return { blobUrl: URL.createObjectURL(blob), date, assetId };
   }
 
   // ── Config ─────────────────────────────────────────────────────────────────
@@ -233,6 +296,7 @@ class ImmichSlideshow extends LitElement {
   static get styles() {
     return css`
       .wrapper {
+        cursor: pointer;
         position: relative;
         width: 100%;
         overflow: hidden;
@@ -270,6 +334,81 @@ class ImmichSlideshow extends LitElement {
         border-radius: 4px;
         pointer-events: none;
         user-select: none;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.2s ease;
+      }
+
+      .modal-content {
+        position: relative;
+        max-width: 92vw;
+        max-height: 92vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal-content img {
+        position: static;
+        width: auto;
+        height: auto;
+        max-width: 92vw;
+        max-height: 92vh;
+        object-fit: contain;
+        opacity: 1;
+        transition: none;
+        border-radius: 4px;
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+      }
+
+      .modal-content img.loading {
+        filter: blur(4px);
+        transition: filter 0.3s ease;
+      }
+
+      .modal-date {
+        position: absolute;
+        bottom: 10px;
+        right: 12px;
+        color: #fff;
+        font-size: 0.78rem;
+        font-family: sans-serif;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        padding: 3px 8px;
+        border-radius: 4px;
+        pointer-events: none;
+      }
+
+      .modal-close {
+        position: absolute;
+        top: -36px;
+        right: 0;
+        background: none;
+        border: none;
+        color: #fff;
+        font-size: 1.2rem;
+        cursor: pointer;
+        opacity: 0.8;
+        line-height: 1;
+        padding: 4px 8px;
+      }
+
+      .modal-close:hover {
+        opacity: 1;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
       }
     `;
   }
