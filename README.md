@@ -43,6 +43,13 @@ All API calls are proxied through the **Home Assistant backend** — no CORS iss
 
 In your Immich web interface, go to **Account Settings → API Keys** and create a new key.
 
+> [!NOTE]
+> When creating the API key, select the following **scopes**:
+> - **`asset.read`**: To search for random images (`POST /api/search/random`)
+> - **`asset.view`**: To fetch thumbnails (`GET /api/assets/{id}/thumbnail`)
+>
+> The `GET /api/server/ping` endpoint used for connectivity checks is **Public** and does not require any specific scope.
+
 ![API Key](https://github.com/Miloune/immich-slideshow/raw/master/screenshots/apikey.jpg)
 
 ### 2. Configure the Integration
