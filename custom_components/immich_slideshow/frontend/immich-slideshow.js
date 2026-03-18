@@ -52,7 +52,11 @@ class ImmichSlideshow extends LitElement {
   render() {
     return html`
       <ha-card style="overflow:hidden;">
-        <div class="wrapper" style="height:${this.config.height}px" @click="${this._openModal}">
+        <div
+          class="wrapper ${this.config.open_on_tap !== false ? 'clickable' : ''}"
+          style="height:${this.config.height}px"
+          @click="${this._openModal}"
+        >
           <img
             src="${this._slotA.src}"
             class="${this._slotA.active ? 'active' : ''}"
@@ -203,6 +207,7 @@ class ImmichSlideshow extends LitElement {
   }
 
   async _openModal() {
+    if (this.config.open_on_tap === false) return;
     const { assetId, src, date } = this._activeSlot;
 
     this._modalSrc = src;
@@ -276,6 +281,7 @@ class ImmichSlideshow extends LitElement {
       isconfig.slideshow_interval = 6;
 
     if (isconfig.show_date === undefined) isconfig.show_date = true;
+    if (isconfig.open_on_tap === undefined) isconfig.open_on_tap = true;
 
     const albums = isconfig.albums;
     if (albums) {
@@ -296,10 +302,12 @@ class ImmichSlideshow extends LitElement {
   static get styles() {
     return css`
       .wrapper {
-        cursor: pointer;
         position: relative;
         width: 100%;
         overflow: hidden;
+      }
+      .wrapper.clickable {
+        cursor: pointer;
       }
 
       img {
@@ -436,6 +444,7 @@ class ImmichSlideshowEditor extends LitElement {
   get _slideshow_interval() { return this._config?.slideshow_interval ?? 10; }
   get _height() { return this._config?.height ?? "100%"; }
   get _show_date() { return this._config?.show_date ?? true; }
+  get _open_on_tap() { return this._config?.open_on_tap ?? true; }
   get _albums() { return this._config?.albums ?? []; }
 
   render() {
@@ -461,6 +470,12 @@ class ImmichSlideshowEditor extends LitElement {
         default: true
       },
       {
+        name: "open_on_tap",
+        required: false,
+        selector: { boolean: {} },
+        default: true
+      },
+      {
         name: "albums",
         required: false,
         selector: { object: {} }
@@ -471,6 +486,7 @@ class ImmichSlideshowEditor extends LitElement {
       slideshow_interval: this._slideshow_interval,
       height: this._height,
       show_date: this._show_date,
+      open_on_tap: this._open_on_tap,
       albums: this._albums,
     };
 
@@ -490,6 +506,7 @@ class ImmichSlideshowEditor extends LitElement {
       slideshow_interval: "Slideshow Interval (seconds, min 6)",
       height: "Card Height (px, e.g. 500)",
       show_date: "Show Date",
+      open_on_tap: "Open modal on tap",
       albums: "Album IDs (Optional List)"
     };
     return labels[schema.name] ?? schema.name;

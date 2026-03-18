@@ -9,7 +9,8 @@
           "apikey": "Immich API Key",
           "search_batch_size": "Number of random images to fetch at once",
           "default_size": "Default image size",
-          "refill_threshold": "Background refill threshold"
+          "refill_threshold": "Background refill threshold",
+          "open_on_tap": "Open modal on tap"
         }
       }
     },
@@ -31,7 +32,8 @@
           "apikey": "Immich API Key",
           "search_batch_size": "Number of random images to fetch at once",
           "default_size": "Default image size",
-          "refill_threshold": "Background refill threshold"
+          "refill_threshold": "Background refill threshold",
+          "open_on_tap": "Open modal on tap"
         }
       }
     }

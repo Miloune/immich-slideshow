@@ -71,6 +71,7 @@ type: custom:immich-slideshow
 slideshow_interval: 10
 height: 500
 show_date: true
+open_on_tap: true
 albums:
   - your_album_id_here
   - another_album_id_here
@@ -83,6 +84,7 @@ albums:
 | `slideshow_interval` | No | `10` | Seconds between images (minimum `6`) |
 | `height` | No | `400` | Card height in pixels — enter a number, e.g. `400` for 400 px |
 | `show_date` | No | `true` | Show the date of the photo in an overlay |
+| `open_on_tap` | No | `true` | Open a larger preview (modal) when clicking the card |
 | `albums` | No | All photos | List of Immich album IDs to restrict the slideshow to |
 
 > [!NOTE]
