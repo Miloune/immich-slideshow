@@ -76,7 +76,8 @@ The Lovelace card resource is registered automatically after setup. Add a new ca
 ```yaml
 type: custom:immich-slideshow
 slideshow_interval: 10
-height: 500
+aspect_ratio: "16/9"
+image_fit: cover
 show_date: true
 open_on_tap: true
 albums:
@@ -89,7 +90,9 @@ albums:
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `slideshow_interval` | No | `10` | Seconds between images (minimum `6`) |
-| `height` | No | `400` | Card height in pixels — enter a number, e.g. `400` for 400 px |
+| `height` | No | `400px` | Card height (e.g. `400px`, `50vh`). Ignored if `aspect_ratio` is set. |
+| `aspect_ratio` | No | `""` | Aspect ratio of the card (e.g. `16/9`, `1/1`, `4/3`). Sets height to `auto`. |
+| `image_fit` | No | `contain` | How the image fits the card: `contain` (full photo), `cover` (fill card), `fill` (stretch). |
 | `show_date` | No | `true` | Show the date of the photo in an overlay |
 | `open_on_tap` | No | `true` | Open a larger preview (modal) when clicking the card |
 | `image_quality` | No | `thumbnail` | Image quality for the slideshow: `thumbnail` (~50 kB) or `preview` (~300 kB) |

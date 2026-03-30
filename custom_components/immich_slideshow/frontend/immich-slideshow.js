@@ -4,23 +4,33 @@ var PlaceholderSrc = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAAB
 const TRANSLATIONS = {
   en: {
     slideshow_interval: "Slideshow Interval (seconds, min 6)",
-    height: "Card Height (px, e.g. 400)",
+    height: "Card Height (e.g. 400px, 50vh)",
+    aspect_ratio: "Aspect Ratio (e.g. 16/9, 1/1)",
+    image_fit: "Image Fit",
     show_date: "Show Date",
     open_on_tap: "Open modal on tap",
     image_quality: "Image Quality",
     albums: "Album IDs (Optional List)",
     thumbnail: "Thumbnail (faster)",
-    preview: "Preview (higher quality)"
+    preview: "Preview (higher quality)",
+    contain: "Contain (full photo)",
+    cover: "Cover (fill card)",
+    fill: "Fill (stretch)"
   },
   fr: {
     slideshow_interval: "Intervalle du diaporama (secondes, min 6)",
-    height: "Hauteur de la carte (px, ex: 400)",
+    height: "Hauteur de la carte (ex: 400px, 50vh)",
+    aspect_ratio: "Format d'image (ex: 16/9, 1/1)",
+    image_fit: "Ajustement de l'image",
     show_date: "Afficher la date",
     open_on_tap: "Ouvrir au clic",
     image_quality: "Qualité de l'image",
     albums: "ID d'albums (Liste optionnelle)",
     thumbnail: "Miniature (plus rapide)",
-    preview: "Aperçu (haute qualité)"
+    preview: "Aperçu (haute qualité)",
+    contain: "Contenir (photo entière)",
+    cover: "Couvrir (remplir la carte)",
+    fill: "Remplir (étirer)"
   }
 };
 
@@ -66,18 +76,32 @@ class ImmichSlideshow extends LitElement {
   static getStubConfig() {
     return {
       slideshow_interval: 10,
-      height: 400,
+      height: "400px",
+      aspect_ratio: "",
+      image_fit: "contain",
       show_date: true,
       albums: []
     };
   }
 
   render() {
+    const height = this.config.aspect_ratio
+      ? "auto"
+      : typeof this.config.height === "number"
+      ? `${this.config.height}px`
+      : this.config.height || "400px";
+
+    const style = `
+      height: ${height};
+      aspect-ratio: ${this.config.aspect_ratio || "auto"};
+      --image-fit: ${this.config.image_fit || "contain"};
+    `;
+
     return html`
       <ha-card style="overflow:hidden;">
         <div
           class="wrapper ${this.config.open_on_tap !== false ? 'clickable' : ''}"
-          style="height:${this.config.height}px"
+          style="${style}"
           @click="${this._openModal}"
         >
           <img
@@ -302,9 +326,8 @@ class ImmichSlideshow extends LitElement {
   setConfig(config) {
     const isconfig = { ...config };
 
-    if (!isconfig.height || isNaN(isconfig.height))
-      isconfig.height = 400;
-    isconfig.height = parseInt(isconfig.height, 10);
+    if (isconfig.height === undefined) isconfig.height = "400px";
+    if (typeof isconfig.height === "number") isconfig.height = `${isconfig.height}px`;
 
     if (!isconfig.slideshow_interval || isconfig.slideshow_interval < 6)
       isconfig.slideshow_interval = 6;
@@ -313,6 +336,11 @@ class ImmichSlideshow extends LitElement {
     if (isconfig.open_on_tap === undefined) isconfig.open_on_tap = true;
     if (!isconfig.image_quality || !["thumbnail", "preview"].includes(isconfig.image_quality))
       isconfig.image_quality = "thumbnail";
+
+    if (!isconfig.image_fit || !["contain", "cover", "fill"].includes(isconfig.image_fit))
+      isconfig.image_fit = "contain";
+
+    if (isconfig.aspect_ratio === undefined) isconfig.aspect_ratio = "";
 
     const albums = isconfig.albums;
     if (albums) {
@@ -347,7 +375,7 @@ class ImmichSlideshow extends LitElement {
         left: 0;
         width: 100%;
         height: 100%;
-        object-fit: contain;
+        object-fit: var(--image-fit, contain);
         opacity: 0;
         z-index: 0;
         transition: opacity 3s ease-in-out;
@@ -473,7 +501,9 @@ class ImmichSlideshowEditor extends LitElement {
   }
 
   get _slideshow_interval() { return this._config?.slideshow_interval ?? 10; }
-  get _height() { return this._config?.height ?? "100%"; }
+  get _height() { return this._config?.height ?? "400px"; }
+  get _aspect_ratio() { return this._config?.aspect_ratio ?? ""; }
+  get _image_fit() { return this._config?.image_fit ?? "contain"; }
   get _show_date() { return this._config?.show_date ?? true; }
   get _open_on_tap() { return this._config?.open_on_tap ?? true; }
   get _image_quality() { return this._config?.image_quality ?? "thumbnail"; }
@@ -492,8 +522,28 @@ class ImmichSlideshowEditor extends LitElement {
       {
         name: "height",
         required: false,
-        selector: { number: { min: 100, mode: "box", unit_of_measurement: "px" } },
-        default: 400
+        selector: { text: {} },
+        default: "400px"
+      },
+      {
+        name: "aspect_ratio",
+        required: false,
+        selector: { text: {} },
+        default: ""
+      },
+      {
+        name: "image_fit",
+        required: false,
+        selector: {
+          select: {
+            options: [
+              { value: "contain", label: this._translate("contain") },
+              { value: "cover", label: this._translate("cover") },
+              { value: "fill", label: this._translate("fill") }
+            ]
+          }
+        },
+        default: "contain"
       },
       {
         name: "show_date",
@@ -530,6 +580,8 @@ class ImmichSlideshowEditor extends LitElement {
     const data = {
       slideshow_interval: this._slideshow_interval,
       height: this._height,
+      aspect_ratio: this._aspect_ratio,
+      image_fit: this._image_fit,
       show_date: this._show_date,
       open_on_tap: this._open_on_tap,
       image_quality: this._image_quality,
