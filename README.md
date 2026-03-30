@@ -92,6 +92,7 @@ albums:
 | `height` | No | `400` | Card height in pixels — enter a number, e.g. `400` for 400 px |
 | `show_date` | No | `true` | Show the date of the photo in an overlay |
 | `open_on_tap` | No | `true` | Open a larger preview (modal) when clicking the card |
+| `image_quality` | No | `thumbnail` | Image quality for the slideshow: `thumbnail` (~50 kB) or `preview` (~300 kB) |
 | `albums` | No | All photos | List of Immich album IDs to restrict the slideshow to |
 
 > [!NOTE]

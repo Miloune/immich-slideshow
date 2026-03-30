@@ -1,6 +1,29 @@
 var ImmichSlideshowVersion = "2.1.0";
 var PlaceholderSrc = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 
+const TRANSLATIONS = {
+  en: {
+    slideshow_interval: "Slideshow Interval (seconds, min 6)",
+    height: "Card Height (px, e.g. 400)",
+    show_date: "Show Date",
+    open_on_tap: "Open modal on tap",
+    image_quality: "Image Quality",
+    albums: "Album IDs (Optional List)",
+    thumbnail: "Thumbnail (faster)",
+    preview: "Preview (higher quality)"
+  },
+  fr: {
+    slideshow_interval: "Intervalle du diaporama (secondes, min 6)",
+    height: "Hauteur de la carte (px, ex: 400)",
+    show_date: "Afficher la date",
+    open_on_tap: "Ouvrir au clic",
+    image_quality: "Qualité de l'image",
+    albums: "ID d'albums (Liste optionnelle)",
+    thumbnail: "Miniature (plus rapide)",
+    preview: "Aperçu (haute qualité)"
+  }
+};
+
 import {
   LitElement,
   html,
@@ -246,10 +269,12 @@ class ImmichSlideshow extends LitElement {
   // ── Network ────────────────────────────────────────────────────────────────
 
   async _fetchImageUrl() {
-    let url = "/api/immich_slideshow/random_image";
+    const size = this.config.image_quality ?? "thumbnail";
+    const params = new URLSearchParams({ size });
     if (this.config.albums?.length > 0) {
-      url += "?albums=" + this.config.albums.join(",");
+      params.set("albums", this.config.albums.join(","));
     }
+    const url = `/api/immich_slideshow/random_image?${params}`;
     const response = await this.hass.fetchWithAuth(url);
     if (!response.ok) throw new Error(`Immich proxy error: ${response.status}`);
 
@@ -282,6 +307,8 @@ class ImmichSlideshow extends LitElement {
 
     if (isconfig.show_date === undefined) isconfig.show_date = true;
     if (isconfig.open_on_tap === undefined) isconfig.open_on_tap = true;
+    if (!isconfig.image_quality || !["thumbnail", "preview"].includes(isconfig.image_quality))
+      isconfig.image_quality = "thumbnail";
 
     const albums = isconfig.albums;
     if (albums) {
@@ -445,6 +472,7 @@ class ImmichSlideshowEditor extends LitElement {
   get _height() { return this._config?.height ?? "100%"; }
   get _show_date() { return this._config?.show_date ?? true; }
   get _open_on_tap() { return this._config?.open_on_tap ?? true; }
+  get _image_quality() { return this._config?.image_quality ?? "thumbnail"; }
   get _albums() { return this._config?.albums ?? []; }
 
   render() {
@@ -476,6 +504,19 @@ class ImmichSlideshowEditor extends LitElement {
         default: true
       },
       {
+        name: "image_quality",
+        required: false,
+        selector: {
+          select: {
+            options: [
+              { value: "thumbnail", label: this._translate("thumbnail") },
+              { value: "preview", label: this._translate("preview") }
+            ]
+          }
+        },
+        default: "thumbnail"
+      },
+      {
         name: "albums",
         required: false,
         selector: { object: {} }
@@ -487,6 +528,7 @@ class ImmichSlideshowEditor extends LitElement {
       height: this._height,
       show_date: this._show_date,
       open_on_tap: this._open_on_tap,
+      image_quality: this._image_quality,
       albums: this._albums,
     };
 
@@ -495,21 +537,19 @@ class ImmichSlideshowEditor extends LitElement {
         .hass=${this.hass}
         .data=${data}
         .schema=${schema}
-        .computeLabel=${this._computeLabel}
+        .computeLabel=${(s) => this._computeLabel(s)}
         @value-changed=${this._valueChanged}
       ></ha-form>
     `;
   }
 
+  _translate(key) {
+    const lang = this.hass?.language?.split("-")[0] || "en";
+    return TRANSLATIONS[lang]?.[key] || TRANSLATIONS.en[key] || key;
+  }
+
   _computeLabel(schema) {
-    const labels = {
-      slideshow_interval: "Slideshow Interval (seconds, min 6)",
-      height: "Card Height (px, e.g. 500)",
-      show_date: "Show Date",
-      open_on_tap: "Open modal on tap",
-      albums: "Album IDs (Optional List)"
-    };
-    return labels[schema.name] ?? schema.name;
+    return this._translate(schema.name);
   }
 
   _valueChanged(ev) {
