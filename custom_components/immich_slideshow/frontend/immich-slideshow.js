@@ -155,8 +155,6 @@ class ImmichSlideshow extends LitElement {
       URL.revokeObjectURL(this._prefetchedUrl);
       this._prefetchedUrl = null;
     }
-
-    this._log("Slideshow stopped, all blobs revoked.");
   }
 
   // ── Slideshow loop ─────────────────────────────────────────────────────────
