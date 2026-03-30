@@ -271,9 +271,15 @@ class ImmichSlideshow extends LitElement {
   async _fetchImageUrl() {
     const size = this.config.image_quality ?? "thumbnail";
     const params = new URLSearchParams({ size });
-    if (this.config.albums?.length > 0) {
-      params.set("albums", this.config.albums.join(","));
+
+    const albums = this.config.albums;
+    if (Array.isArray(albums)) {
+      const validAlbums = albums.filter(id => typeof id === "string" && id.trim() !== "");
+      if (validAlbums.length > 0) {
+        params.set("albums", validAlbums.join(","));
+      }
     }
+
     const url = `/api/immich_slideshow/random_image?${params}`;
     const response = await this.hass.fetchWithAuth(url);
     if (!response.ok) throw new Error(`Immich proxy error: ${response.status}`);
